@@ -2,7 +2,15 @@
 name = "rip"
 version = "0.1.0"
 edition = "2024"
+description = "A TUI to list processes bound to ports and kill them interactively"
+license = "MIT"
+repository = "https://github.com/suryanox/rip"
+authors = ["suryanox"]
 
 [dependencies]
 crossterm = "0.29.0"
 ratatui = "0.30.0"
+
+[profile.release]
+lto = true
+strip = true

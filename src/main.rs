@@ -196,7 +196,6 @@ fn main() -> io::Result<()> {
 
     loop {
         terminal.draw(|frame| ui(frame, &mut app))?;
-
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
