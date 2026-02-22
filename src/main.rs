@@ -222,55 +222,218 @@ fn main() -> io::Result<()> {
 }
 
 fn ui(frame: &mut Frame, app: &mut App) {
+    let area = frame.area();
+    
+    frame.render_widget(
+        Block::default().style(Style::default().bg(Color::Rgb(15, 15, 25))),
+        area,
+    );
+
+    let outer_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .split(area);
+
+    let main_area = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(2),
+        ])
+        .split(outer_layout[1])[1];
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),
-            Constraint::Min(5),
+            Constraint::Length(5),
+            Constraint::Length(1),
+            Constraint::Min(8),
+            Constraint::Length(1),
             Constraint::Length(3),
         ])
-        .split(frame.area());
+        .split(main_area);
 
-    let title = Paragraph::new("rip - Kill processes on ports")
-        .style(Style::default().fg(Color::Cyan).bold())
-        .block(Block::default().borders(Borders::ALL));
+    let title_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Rgb(138, 43, 226)))
+        .style(Style::default().bg(Color::Rgb(20, 20, 35)));
+
+    let title_text = vec![
+        Line::from(vec![
+            Span::styled("⚡ ", Style::default().fg(Color::Rgb(255, 165, 0))),
+            Span::styled("rip", Style::default().fg(Color::Rgb(255, 100, 100)).bold()),
+            Span::styled(" — ", Style::default().fg(Color::Rgb(100, 100, 120))),
+            Span::styled("Process Killer", Style::default().fg(Color::Rgb(200, 200, 220))),
+        ]),
+        Line::from(vec![
+            Span::styled("   Kill processes hogging your ports", Style::default().fg(Color::Rgb(120, 120, 140)).italic()),
+        ]),
+    ];
+
+    let title = Paragraph::new(title_text)
+        .block(title_block)
+        .alignment(Alignment::Center);
     frame.render_widget(title, chunks[0]);
+
+    let header = Line::from(vec![
+        Span::styled("   ", Style::default()),
+        Span::styled("PORT", Style::default().fg(Color::Rgb(100, 200, 255)).bold()),
+        Span::styled("      ", Style::default()),
+        Span::styled("PROTO", Style::default().fg(Color::Rgb(100, 200, 255)).bold()),
+        Span::styled("   ", Style::default()),
+        Span::styled("PID", Style::default().fg(Color::Rgb(100, 200, 255)).bold()),
+        Span::styled("       ", Style::default()),
+        Span::styled("NAME", Style::default().fg(Color::Rgb(100, 200, 255)).bold()),
+    ]);
+    
+    let header_widget = Paragraph::new(header)
+        .style(Style::default().bg(Color::Rgb(30, 30, 50)));
+    frame.render_widget(header_widget, chunks[1]);
 
     let items: Vec<ListItem> = app
         .processes
         .iter()
-        .map(|p| {
-            let content = format!(
-                ":{:<6} {:4} {:>6}  {}",
-                p.port, p.protocol, p.pid, p.name
-            );
-            ListItem::new(content)
+        .enumerate()
+        .map(|(idx, p)| {
+            let is_selected = app.list_state.selected() == Some(idx);
+            
+            let port_color = if p.port < 1024 {
+                Color::Rgb(255, 100, 100)
+            } else if p.port < 10000 {
+                Color::Rgb(255, 200, 100)
+            } else {
+                Color::Rgb(100, 255, 150)
+            };
+
+            let proto_color = if p.protocol == "TCP" {
+                Color::Rgb(100, 200, 255)
+            } else {
+                Color::Rgb(200, 150, 255)
+            };
+
+            let line = Line::from(vec![
+                Span::styled(
+                    format!(":{:<5}", p.port),
+                    Style::default().fg(port_color).bold(),
+                ),
+                Span::styled("   ", Style::default()),
+                Span::styled(
+                    format!("{:5}", p.protocol),
+                    Style::default().fg(proto_color),
+                ),
+                Span::styled("   ", Style::default()),
+                Span::styled(
+                    format!("{:>7}", p.pid),
+                    Style::default().fg(Color::Rgb(180, 180, 200)),
+                ),
+                Span::styled("   ", Style::default()),
+                Span::styled(
+                    p.name.clone(),
+                    Style::default().fg(if is_selected {
+                        Color::White
+                    } else {
+                        Color::Rgb(220, 220, 240)
+                    }),
+                ),
+            ]);
+
+            ListItem::new(line)
         })
         .collect();
+
+    let process_count = app.processes.len();
+    let selected_info = match app.list_state.selected() {
+        Some(i) => format!(" {}/{} ", i + 1, process_count),
+        None => format!(" {} ", process_count),
+    };
 
     let list = List::new(items)
         .block(
             Block::default()
-                .title("Processes (PORT | PROTO | PID | NAME)")
-                .borders(Borders::ALL),
+                .title(Line::from(vec![
+                    Span::styled(" ", Style::default()),
+                    Span::styled("●", Style::default().fg(Color::Rgb(100, 255, 150))),
+                    Span::styled(" Listening Processes ", Style::default().fg(Color::Rgb(200, 200, 220)).bold()),
+                ]))
+                .title_bottom(Line::from(vec![
+                    Span::styled(selected_info, Style::default().fg(Color::Rgb(150, 150, 170))),
+                ]).alignment(Alignment::Right))
+                .borders(Borders::ALL)
+                .border_type(ratatui::widgets::BorderType::Rounded)
+                .border_style(Style::default().fg(Color::Rgb(70, 70, 100)))
+                .style(Style::default().bg(Color::Rgb(20, 20, 35))),
         )
         .highlight_style(
             Style::default()
-                .bg(Color::DarkGray)
+                .bg(Color::Rgb(60, 60, 100))
                 .fg(Color::White)
                 .bold(),
         )
-        .highlight_symbol(">> ");
+        .highlight_symbol(" ▸ ");
 
-    frame.render_stateful_widget(list, chunks[1], &mut app.list_state);
+    frame.render_stateful_widget(list, chunks[2], &mut app.list_state);
 
-    let help_text = match &app.message {
-        Some(msg) => format!("{} | ↑/↓:Navigate  Enter/d:Kill  r:Refresh  q:Quit", msg),
-        None => "↑/↓:Navigate  Enter/d:Kill  r:Refresh  q:Quit".to_string(),
+    let status_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Rgb(70, 70, 100)))
+        .style(Style::default().bg(Color::Rgb(20, 20, 35)));
+
+    let (msg_text, msg_style) = match &app.message {
+        Some(msg) if msg.contains("Killed") => (
+            msg.clone(),
+            Style::default().fg(Color::Rgb(100, 255, 150)),
+        ),
+        Some(msg) if msg.contains("Failed") => (
+            msg.clone(),
+            Style::default().fg(Color::Rgb(255, 100, 100)),
+        ),
+        Some(msg) => (
+            msg.clone(),
+            Style::default().fg(Color::Rgb(180, 180, 200)),
+        ),
+        None => (String::new(), Style::default()),
     };
 
-    let status = Paragraph::new(help_text)
-        .style(Style::default().fg(Color::Yellow))
-        .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(status, chunks[2]);
+    let keybinds = vec![
+        ("↑↓", "navigate"),
+        ("d", "kill"),
+        ("r", "refresh"),
+        ("q", "quit"),
+    ];
+
+    let mut help_spans = Vec::new();
+    if !msg_text.is_empty() {
+        help_spans.push(Span::styled(msg_text, msg_style));
+        help_spans.push(Span::styled("  │  ", Style::default().fg(Color::Rgb(70, 70, 100))));
+    }
+
+    for (i, (key, action)) in keybinds.iter().enumerate() {
+        help_spans.push(Span::styled(
+            format!(" {} ", key),
+            Style::default()
+                .fg(Color::Rgb(30, 30, 50))
+                .bg(Color::Rgb(138, 43, 226))
+                .bold(),
+        ));
+        help_spans.push(Span::styled(
+            format!(" {} ", action),
+            Style::default().fg(Color::Rgb(150, 150, 170)),
+        ));
+        if i < keybinds.len() - 1 {
+            help_spans.push(Span::styled(" ", Style::default()));
+        }
+    }
+
+    let help_line = Line::from(help_spans);
+    let status = Paragraph::new(help_line)
+        .block(status_block)
+        .alignment(Alignment::Center);
+    frame.render_widget(status, chunks[4]);
 }
